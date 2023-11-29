@@ -1,11 +1,11 @@
 from requests import get
 from bs4 import BeautifulSoup
 import requests, os, json
-from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from discord_webhook import DiscordWebhook
 
-load_dotenv()
+GET_SECRET_KEY="get-secret-@!*%&^*&B*&@*NFDNLKsal:JMI:JMg!!@&HN"
+POST_SECRET_KEY="post-secret-!*%*NF@DN*&@LKsal:JMI:Mg!H@&NJ!"
 
 
 info_type = {
@@ -63,7 +63,7 @@ def knu_comp_crawling(option):
 
 def save_to_server(infos):
     if len(infos) > 0:
-        post_secret_key = os.environ.get("POST_SECRET_KEY")
+        post_secret_key = POST_SECRET_KEY
         for info in infos:
             requests.post(
                 f"http://127.0.0.1:8000/api/v1/infos/all/{post_secret_key}",
@@ -80,7 +80,7 @@ def send_to_links(infos):
     if len(infos) >= 0:
         # 오류난 링크들 저장
         error_links = []
-        get_secret_key = os.environ.get("GET_SECRET_KEY")
+        get_secret_key = GET_SECRET_KEY
         res_links = requests.get(
             f"http://127.0.0.1:8000/api/v1/links/all/{get_secret_key}"
         )
@@ -97,7 +97,7 @@ def send_to_links(infos):
 
 def delete_error_link_users(error_links):
     # 오류난 링크 삭제 처리
-    post_secret_key = os.environ.get("POST_SECRET_KEY")
+    post_secret_key = POST_SECRET_KEY
     requests.post(
         f"http://127.0.0.1:8000/api/v1/users/delete-errorlink-users/{post_secret_key}",
         json=json.dumps(error_links),
