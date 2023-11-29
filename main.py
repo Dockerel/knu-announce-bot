@@ -58,7 +58,7 @@ def knu_comp_crawling(option):
                         return dbs
                 dbs.append(data)
 
-    return dbs
+    return dbs[::-1]
 
 
 def save_to_server(infos):
