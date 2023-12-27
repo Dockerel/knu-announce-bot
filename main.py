@@ -4,8 +4,8 @@ import requests, os, json
 from datetime import datetime, timedelta, timezone
 from discord_webhook import DiscordWebhook
 
-GET_SECRET_KEY="get-secret-@!*%&^*&B*&@*NFDNLKsal:JMI:JMg!!@&HN"
-POST_SECRET_KEY="post-secret-!*%*NF@DN*&@LKsal:JMI:Mg!H@&NJ!"
+GET_SECRET_KEY = "get-secret-@!*%&^*&B*&@*NFDNLKsal:JMI:JMg!!@&HN"
+POST_SECRET_KEY = "post-secret-!*%*NF@DN*&@LKsal:JMI:Mg!H@&NJ!"
 
 
 info_type = {
@@ -62,11 +62,12 @@ def knu_comp_crawling(option):
 
 
 def save_to_server(infos):
+    latest_response=None
     if len(infos) > 0:
         post_secret_key = POST_SECRET_KEY
         for info in infos:
-            requests.post(
-                f"http://127.0.0.1:8000/api/v1/infos/all/{post_secret_key}",
+            latest_response=requests.post(
+                f"http://127.0.0.1:8000/api/v1/infos/{post_secret_key}",
                 data={
                     "info_type": info_type[info[0]],
                     "title": info[1],
@@ -74,37 +75,60 @@ def save_to_server(infos):
                     "date": info[3],
                 },
             )
+    now=str(datetime.now()).split(".")[0]
+    print(f"[{now}] {latest_response.status_code} : new infos saved")
 
+def infosFormatter(infos):
+    # 날짜별로 나눠서 전송 - 날짜별로 딕셔너리 구성
+    msgs=dict()
+    for info in infos:
+        if msgs.get(info[3])==None:
+            msgs[info[3]]=[]
+        msgs[info[3]].append(info[:3])
+    return msgs
 
 def send_to_links(infos):
-    if len(infos) >= 0:
-        # 오류난 링크들 저장
-        error_links = []
-        get_secret_key = GET_SECRET_KEY
-        res_links = requests.get(
-            f"http://127.0.0.1:8000/api/v1/links/all/{get_secret_key}"
-        )
-        datas = res_links.json()
+    msgs=infosFormatter(infos)
+    # if len(infos) >= 0:
+    #     # 오류난 링크들 저장
+    #     error_links = []
+    #     get_secret_key = GET_SECRET_KEY
+    #     res_links = requests.get(
+    #         f"http://127.0.0.1:8000/api/v1/links/all/{get_secret_key}"
+    #     )
+    #     datas = res_links.json()
 
-        for data in datas:
-            webhook = DiscordWebhook(url=data.get("link"), content="hi")
-            response = webhook.execute()
-            if response.status_code != 200:
-                error_links.append(data)
+    #     for data in datas:
+    #         webhook = DiscordWebhook(url=data.get("link"), content=msgs)
+    #         response = webhook.execute()
+    #         if response.status_code != 200:
+    #             error_links.append(data)
 
-        delete_error_link_users(error_links)
+    #     delete_error_link_users(error_links)
+    # now=str(datetime.now()).split(".")[0]
+    # print(f"[{now}] {response.status_code} : new infos sended")
 
 
 def delete_error_link_users(error_links):
     # 오류난 링크 삭제 처리
     post_secret_key = POST_SECRET_KEY
-    requests.post(
+    response=requests.post(
         f"http://127.0.0.1:8000/api/v1/users/delete-errorlink-users/{post_secret_key}",
         json=json.dumps(error_links),
     )
+    now=str(datetime.now()).split(".")[0]
+    print(f"[{now}] {response.status_code} : error users deleted")
+
+def delete_request_to_server():
+    response = requests.get(
+            "http://127.0.0.1:8000/api/v1/infos/deleteInfos"
+        )
+    now=str(datetime.now()).split(".")[0]
+    print(f"[{now}] {response.status_code} : old infos deleted")
 
 
-# results = knu_comp_crawling("all")
-results = knu_comp_crawling("today")
+results = knu_comp_crawling("all")
+# results = knu_comp_crawling("today")
+delete_request_to_server()
 save_to_server(results)
 send_to_links(results)
