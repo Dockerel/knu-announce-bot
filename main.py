@@ -6,6 +6,8 @@ from discord_webhook import DiscordWebhook
 
 class KnuCompCrawler:
     def __init__(self, option):
+        self.base_url = "http://127.0.0.1:8000/api/v1"
+
         self.option = option
 
         self.GET_SECRET_KEY = "get-secret-@!*%&^*&B*&@*NFDNLKsal:JMI:JMg!!@&HN"
@@ -28,23 +30,34 @@ class KnuCompCrawler:
             self.save_to_server(results)
             self.delete_request_to_server()
             self.send_to_links(results)
+        else:
+            self.print_complete_msg(200, "nothing to send today")
+            self.send_to_links([])
 
     def today_date_of_korea(self):
         datetime_utc = datetime.utcnow()
         timezone_kst = timezone(timedelta(hours=9))
         datetime_kst = datetime_utc.astimezone(timezone_kst)
-        today = f"{datetime_kst.year}-{datetime_kst.month}-{datetime_kst.day}"
+        today_year = str(datetime_kst.year).zfill(2)
+        today_month = str(datetime_kst.month).zfill(2)
+        today_day = str(datetime_kst.day).zfill(2)
+        today = f"{today_year}-{today_month}-{today_day}"
         return today
+
+    def print_complete_msg(self, status, msg):
+        now = str(datetime.now()).split(".")[0]
+        print(f"[{now}] {status} : {msg}")
 
     def knu_comp_crawling(self):
         dbs = []
         today = self.today_date_of_korea()
+        print(today)
 
-        base_url = "https://computer.knu.ac.kr/bbs/board.php?bo_table=sub5_1&page="
+        comp_url = "https://computer.knu.ac.kr/bbs/board.php?bo_table=sub5_1&page="
         max_page_nb = 2
 
         for page_nb in range(max_page_nb):
-            response = requests.get(f"{base_url}{page_nb+1}")
+            response = requests.get(f"{comp_url}{page_nb+1}")
             soup = BeautifulSoup(response.text, "html.parser")
             infos = soup.find_all("tr")
             for info in infos:
@@ -63,9 +76,10 @@ class KnuCompCrawler:
 
                     if self.option == "today":
                         if today != date:
+                            self.print_complete_msg(200, "crawling finished")
                             return dbs
                     dbs.append(data)
-
+        self.print_complete_msg(200, "crawling finished")
         return dbs[::-1]
 
     def save_to_server(self, infos):
@@ -74,7 +88,7 @@ class KnuCompCrawler:
                 post_secret_key = self.POST_SECRET_KEY
                 for info in infos:
                     latest_response = requests.post(
-                        f"http://127.0.0.1:8000/api/v1/infos/{post_secret_key}",
+                        f"{self.base_url}/infos/{post_secret_key}",
                         data={
                             "info_type": self.info_type[info[0]],
                             "title": info[1],
@@ -82,11 +96,9 @@ class KnuCompCrawler:
                             "date": info[3],
                         },
                     )
-            now = str(datetime.now()).split(".")[0]
-            print(f"[{now}] 200 : new infos saved")
+            self.print_complete_msg(200, "new infos saved")
         except:
-            now = str(datetime.now()).split(".")[0]
-            print(f"[{now}] 400 : bad requests")
+            self.print_complete_msg(400, "bad requests")
 
     def infosFormatter(self, infos):
         # 날짜별로 나눠서 전송 - 날짜별로 딕셔너리 구성
@@ -101,25 +113,21 @@ class KnuCompCrawler:
         # 오류난 링크 삭제 처리
         post_secret_key = self.POST_SECRET_KEY
         response = requests.post(
-            f"http://127.0.0.1:8000/api/v1/users/delete-errorlink-users/{post_secret_key}",
+            f"{self.base_url}/users/delete-errorlink-users/{post_secret_key}",
             json=json.dumps(error_links),
         )
         now = str(datetime.now()).split(".")[0]
-        print(f"[{now}] {response.status_code} : error users deleted")
+        self.print_complete_msg(response.status_code, "error users deleted")
 
     def send_to_links(self, infos):
-        msgs = self.infosFormatter(infos)
-        now = str(datetime.now()).split(".")[0]
         try:
-            if len(infos) >= 0:
-                # 오류난 링크들 저장
-                error_links = []
-                get_secret_key = self.GET_SECRET_KEY
-                res_links = requests.get(
-                    f"http://127.0.0.1:8000/api/v1/links/all/{get_secret_key}"
-                )
-                datas = res_links.json()
-
+            # 오류난 링크들 저장
+            error_links = []
+            get_secret_key = self.GET_SECRET_KEY
+            res_links = requests.get(f"{self.base_url}/links/all/{get_secret_key}")
+            datas = res_links.json()
+            if len(infos) > 0:
+                msgs = self.infosFormatter(infos)
                 for k in msgs.keys():
                     temp_msg = ""
 
@@ -133,16 +141,25 @@ class KnuCompCrawler:
                         response = webhook.execute()
                         if response.status_code != 200:
                             error_links.append(data)
-                if len(error_links) > 0:
-                    self.delete_error_link_users(error_links)
-            print(f"[{now}] 200 : new infos sended")
-        except:
-            print(f"[{now}] 400 : bad requests")
+                self.print_complete_msg(200, "new infos sended")
+            else:
+                for data in datas:
+                    webhook = DiscordWebhook(
+                        url=data.get("link"),
+                        content="==========\n\nnothing to send today\n\n==========",
+                    )
+                    response = webhook.execute()
+                    if response.status_code != 200:
+                        error_links.append(data)
+            if len(error_links) > 0:
+                self.delete_error_link_users(error_links)
+        except Exception as e:
+            print(e)
+            self.print_complete_msg(400, "bad requests")
 
     def delete_request_to_server(self):
-        response = requests.get("http://127.0.0.1:8000/api/v1/infos/deleteInfos")
-        now = str(datetime.now()).split(".")[0]
-        print(f"[{now}] {response.status_code} : old infos deleted")
+        response = requests.get(f"{self.base_url}/infos/deleteInfos")
+        self.print_complete_msg(response.status_code, "old infos deleted")
 
 
 knu_crawler = KnuCompCrawler("today")
